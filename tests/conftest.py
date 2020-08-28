@@ -1,35 +1,51 @@
-from flask.testing import FlaskClient
-from pathlib import Path
 from pytest import fixture
-from typing import Iterator
 
-from eNMS import create_app, db
-from eNMS.config import config_dict
+from eNMS.database import db
+from eNMS.server import Server
 
-
-@fixture
-def base_client() -> Iterator[FlaskClient]:
-    app = create_app(Path.cwd(), config_dict["Debug"])
-    app_context = app.app_context()
-    app_context.push()
-    db.session.close()
-    db.drop_all()
-    yield app.test_client()
+import warnings
 
 
 @fixture
-def user_client() -> Iterator[FlaskClient]:
-    app = create_app(Path.cwd(), config_dict["Debug"])
-    app_context = app.app_context()
-    app_context.push()
-    db.session.close()
-    db.drop_all()
-    client = app.test_client()
-    login = {
-        "name": "admin",
-        "password": "admin",
-        "authentication_method": "Local User",
-    }
-    with app.app_context():
-        client.post("/admin/login", data=login)
-        yield client
+def base_client():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        app = Server("test")
+        app_context = app.app_context()
+        app_context.push()
+        db.session.close()
+        yield app.test_client()
+
+
+@fixture
+def user_client():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        app = Server("test")
+        app_context = app.app_context()
+        app_context.push()
+        db.session.close()
+        client = app.test_client()
+        with app.app_context():
+            client.post(
+                "/login",
+                data={
+                    "name": "admin",
+                    "password": "admin",
+                    "authentication_method": "database",
+                },
+            )
+            yield client
+
+
+def check_pages(*pages):
+    def decorator(function):
+        def wrapper(user_client):
+            function(user_client)
+            for page in pages:
+                r = user_client.get(page, follow_redirects=True)
+                assert r.status_code == 200
+
+        return wrapper
+
+    return decorator
