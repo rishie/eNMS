@@ -1,0 +1,119 @@
+{% extends "base_site.html" %} {% block title %} Geographical View {% endblock title %}
+{% set dimension = visualization["geographical"]["default"] %} {% block stylesheets %}
+{{ super() }} {% if endpoint == "geographical_view" %} {% if dimension == "2D" %}
+<link
+  href="{{ url_for('static', filename='lib/leaflet/leaflet.min.css') }}"
+  rel="stylesheet"
+/>
+<link
+  href="{{ url_for('static', filename='lib/leaflet-markercluster/leaflet.markercluster.min.css') }}"
+  rel="stylesheet"
+/>
+{% else %}
+<link
+  href="{{ url_for('static', filename='lib/cesium/Widgets/widgets.css') }}"
+  rel="stylesheet"
+/>
+{% endif %} {% endif %}
+<link
+  href="{{ url_for('static', filename='css/visualization.css') }}"
+  rel="stylesheet"
+/>
+{% if endpoint == "logical_view" %}
+<style>
+  .scene-tooltip {
+    color: {{ themes["themes"][current_user.theme]["view"]["logical"]["label"] }} !important;
+  }
+</style>
+{% endif %} {% endblock stylesheets %} {% block content %}
+<form id="device-filtering-form" class="overlay"></form>
+<form id="link-filtering-form" class="overlay"></form>
+{% if endpoint == "logical_view" %}
+<div id="network"></div>
+{% else %}
+<div id="map"></div>
+{% endif %}
+<ul id="contextMenu" class="dropdown-menu" role="menu">
+  {% if dimension == "2D" %}
+  <li class="menu dropdown-submenu geo-menu">
+    <a class="menu-submenu menu-layer" tabindex="-1" href="#"
+      >Type of View<span class="caret-right"></span
+    ></a>
+    <ul class="dropdown-menu">
+      <li><a tabindex="-1" href="#">Normal</a></li>
+      <li><a tabindex="-1" href="#">Clustered</a></li>
+    </ul>
+  </li>
+  <li class="menu dropdown-submenu geo-menu">
+    <a class="menu-submenu menu-layer" tabindex="-1" href="#"
+      >Tile layer<span class="caret-right"></span
+    ></a>
+    <ul class="dropdown-menu">
+      <li><a tabindex="-1" href="#">Open Street Map</a></li>
+      <li><a tabindex="-1" href="#">Google Maps</a></li>
+    </ul>
+  </li>
+  <li class="menu dropdown-submenu geo-menu">
+    <a class="menu-submenu menu-layer" tabindex="-1" href="#"
+      >Type of Marker<span class="caret-right"></span
+    ></a>
+    <ul class="dropdown-menu">
+      <li><a tabindex="-1" href="#">Image</a></li>
+      <li><a tabindex="-1" href="#">Circle</a></li>
+      <li><a tabindex="-1" href="#">Circle Marker</a></li>
+    </ul>
+  </li>
+  {% endif %}
+  <li class="menu rc-device-menu rc-link-menu rc-site-menu">
+    <a tabindex="-1" href="#">Properties</a>
+  </li>
+  <li class="menu rc-device-menu"><a tabindex="-1" href="#">Connect</a></li>
+  <li class="menu rc-device-menu">
+    <a tabindex="-1" href="#">Configuration</a>
+  </li>
+</ul>
+<nav class="navbar navbar-default controls nav-controls" role="navigation">
+  <input
+    id="view-type"
+    type="checkbox"
+    checked
+    data-toggle="toggle"
+    data-on="Network"
+    data-off="Sites"
+  />
+  <button
+    style="margin-left: 5px;"
+    type="button"
+    id="device-filtering"
+    class="btn btn-primary btn-search"
+  >
+    <span class="glyphicon glyphicon-search"></span>&nbsp;&nbsp;Device
+  </button>
+  <button type="button" id="link-filtering" class="btn btn-primary btn-search">
+    <span class="glyphicon glyphicon-search"></span>&nbsp;&nbsp;Link
+  </button>
+  <button
+    type="button"
+    class="btn btn-info"
+    data-tooltip="Refresh"
+    type="button"
+    onclick="eNMS.visualization.filterView()"
+  >
+    <span class="glyphicon glyphicon-refresh"></span>
+  </button>
+</nav>
+{% endblock content %} {% block javascripts %} {{ super()}} {% if endpoint ==
+"logical_view" %}
+<script src="{{ url_for('static', filename='lib/3d-force-graph/three.min.js') }}"></script>
+<script src="{{ url_for('static', filename='lib/3d-force-graph/three-spritetext.min.js') }}"></script>
+<script src="{{ url_for('static', filename='lib/3d-force-graph/3d-force-graph.min.js') }}"></script>
+{% elif dimension == "2D" %}
+<script src="{{ url_for('static', filename='lib/leaflet/leaflet.min.js') }}"></script>
+<script src="{{ url_for('static', filename='lib/leaflet-markercluster/leaflet.markercluster.min.js') }}"></script>
+{% else %}
+<script src="{{ url_for('static', filename='lib/cesium/Cesium.js') }}"></script>
+{% endif %}
+<script>
+  let visualization = {{ visualization|tojson|safe }};
+</script>
+{% endblock javascripts %}

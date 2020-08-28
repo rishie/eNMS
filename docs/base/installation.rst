@@ -2,11 +2,22 @@
 Installation
 ============
 
-Requirements: python 3.6+
-(Earlier versions of python not supported.)
+eNMS is a Flask web application designed to run on a **Unix server** with Python **3.6+**.
 
-Run eNMS in test mode
----------------------
+.. contents::
+  :local:
+  :depth: 1
+
+|
+
+
+First steps
+###########
+
+The first step is to download the application. You can download the latest release of eNMS directly from your browser,
+by going to the `Release section <https://github.com/eNMS-automation/eNMS/releases>`_ of eNMS github repository.
+
+The other option is to clone the master branch of the git repository from github:
 
 ::
 
@@ -14,304 +25,380 @@ Run eNMS in test mode
  git clone https://github.com/afourmy/eNMS.git
  cd eNMS
 
- # install the requirements:
- pip install -r requirements.txt
+Once the application is installed, you must go to the `eNMS` folder and install eNMS python depedencies:
 
-Start eNMS in debugging mode :
+::
+
+ # install the requirements:
+ pip install -r build/requirements/requirements.txt
+
+Once the requirements have been installed, you can run the application with Flask built-in development server.
 
 ::
 
  # set the FLASK_APP environment variable
- (Windows) set FLASK_APP=app.py
- (Unix) export FLASK_APP=app.py
+ export FLASK_APP=app.py
 
- # set the FLASK_DEBUG environment variable
- (Windows) set FLASK_DEBUG=1
- (Unix) export FLASK_DEBUG=1
-
- # run the application
+ # start the application with Flask
  flask run --host=0.0.0.0
 
-Start eNMS with gunicorn :
+|
+
+Production mode
+###############
+
+Database
+********
+
+By default, eNMS will use an SQLite database (`sqlite:///database.db`). You can configure a different database with the
+`DATABASE_URL` environment variable
+(see `SQL Alchemy database URL <https://docs.sqlalchemy.org/en/13/core/engines.html#database-urls>`_)
+
+For example, for a MySQL database, the variable could be:
 
 ::
 
- # start gunicorn in command-line
+ export DATABASE_URL="mysql://root:password@localhost/enms"
+
+
+Secret key
+**********
+
+You need to configure the secret key used by Flask to sign sessions
+
+::
+
+ # set the SECRET_KEY environment variable
+ export SECRET_KEY=value-of-your-secret-key
+
+WSGI server
+***********
+
+You must use a WSGI HTTP server like gunicorn to run eNMS instead of Flask development server.
+
+You can find a configuration file for gunicorn in the main folder (`gunicorn.py`), and run the application with the 
+following command:
+
+::
+
+ # start the application with gunicorn
  gunicorn --config gunicorn.py app:app
 
- # or simply
- ./boot.sh
+Hashicorp Vault
+***************
 
-
-Start eNMS as a docker container :
-
-::
-
- # download & run the container
- docker run -d -p 5000:5000 --name enms --restart always afourmy/enms
-
-Once eNMS is running, you can go to http://127.0.0.1:5000, and log in with the admin account (``admin`` / ``admin``).
-
-Run eNMS in Production (Unix only)
-----------------------------------
-
-To start eNMS in production mode, you must change the value of the environment variable "ENMS_CONFIG_MODE" to "Production".
-
-::
-
- # set the ENMS_CONFIG_MODE environment variable
- export ENMS_CONFIG_MODE=Production
-
-The Flask secret key is used for securely signing the session cookie and other security related needs.
-In production mode, the secret key is not automatically set to a default value in case it is missing. Therefore, you must configure it yourself:
-
-::
-
- # set the ENMS_SECRET_KEY environment variable
- export ENMS_SECRET_KEY=value-of-your-secret-key
-
-
-All credentials should be stored in a Hashicorp Vault: the environement variable ``USE_VAULT`` tells eNMS that a Vault has been setup and can be used. This variable is set to ``0`` by default in debug mode, and ``1`` in production mode.
+All credentials should be stored in a Hashicorp Vault: the settings variable ``active`` under the ``vault`` section of
+the settings tells eNMS that a Vault has been setup and can be used.
 Follow the manufacturer's instructions and options for how to setup a Hashicorp Vault.
 
-If you want to use the Vault in debug mode, you can set it to 1:
- 
-::
-
- # set the USE_VAULT environment variable
- export USE_VAULT=1
-
-Once this is done, you must tell eNMS how to connect to the vault:
+You must tell eNMS how to connect to the Vault with
+  - the ``VAULT_ADDRESS`` environment variable
+  - the ``VAULT_TOKEN`` environment variable
 
 ::
 
- # set the VAULT_ADDR environment variable
- export VAULT_ADDR=vault-address
-
+ # set the VAULT_ADDRESS environment variable
+ export VAULT_ADDRESS=url of the vault
  # set the VAULT_TOKEN environment variable
  export VAULT_TOKEN=vault-token
 
 eNMS can also unseal the Vault automatically at start time.
 This mechanism is disabled by default. To activate it, you need to:
-- set the ``UNSEAL_VAULT`` environement variable to ``1``
+- set the ``unseal`` settings variable to ``true``
 - set the UNSEAL_VAULT_KEYx (``x`` in [1, 5]) environment variables :
 
 ::
 
- export UNSEAL_VAULT=1
- # set the UNSEAL_VAULT_KEYx environment variable
  export UNSEAL_VAULT_KEY1=key1
  export UNSEAL_VAULT_KEY2=key2
  etc
 
-You also have to tell eNMS the address of your database by setting the "ENMS_DATABASE_URL" environment variable.
+.. _Settings:
+
+Settings
+########
+
+The ``/setup/settings.json`` file includes:
+
+- Environment variables for all sensitive data (passwords, tokens, keys). Environment variables are exported
+  from Unix with the ``export`` keyword: ``export VARIABLE_NAME=value``. Environment variables include:
 
 ::
 
- # set the ENMS_DATABASE_URL environment variable
- export ENMS_DATABASE_URL=database-address
+    - SECRET_KEY = secret_key
+    - MAIL_PASSWORD = mail_password
+    - TACACS_PASSWORD = tacacs_password
+    - SLACK_TOKEN = slack_token
 
-In case this environment variable is not set, eNMS will default to using a SQLite database.
+- Public variables defined in the ``settings.json`` file, and later modifiable from the administration
+  panel. Note that changing settings from the administration panel do not currently cause the settings.json file
+  to be rewritten.
 
-Run eNMS with a PostgreSQL database
------------------------------------
+.. _app-settings:
 
-In production, it is advised to use a PostgreSQL database to store data. This can be hosted locally or on a remote server. 
+Settings ``app`` section
+**************************
 
-.. note:: The installation instructions provided here have been tested to work on Ubuntu 16.04 and CentOS 7.4. The particular commands needed to install dependencies on other distributions may vary significantly.
+- ``address`` (default: ``""``) The address is needed when eNMS needs to provide a link back to the application,
+  which is the case with GoTTY and mail notifications. When left empty, eNMS will try to guess the URL. This might
+  not work consistently depending on your environment (nginx configuration, proxy, ...)
+- ``config_mode`` (default: ``"debug"``) Must be set to "debug" or "production".
+- ``startup_migration`` (default: ``"examples"``) Name of the migration to load when eNMS starts for the first time.
+By default, when eNMS loads for the first time, it will create a network topology and a number of services and workflows
+as examples of what you can do. You can set the migration to ``"default"`` instead, in which case eNMS will only load what
+is required for the application to function properly.
+- ``documentation_url`` (default: ``"https://enms.readthedocs.io/en/latest/"``) Can be changed if you want to host your
+  own version of the documentation locally. Points to the online documentation by default.
+- ``git_repository`` (default: ``""``) Git is used as a version control system for device configurations: this variable
+  is the address of the remote git repository where eNMS will push all device configurations.
 
-Installation on Ubuntu
-**********************
+Settings ``cluster`` section
+*******************************
 
-If a recent enough version of PostgreSQL is not available through your distribution's package manager, you'll need to install it from an official PostgreSQL repository.
+- ``active`` (default: ``false``)
+- ``id`` (default: ``true``)
+- ``scan_subnet`` (default: ``"192.168.105.0/24"``)
+- ``scan_protocol`` (default: ``"http"``)
+- ``scan_timeout`` (default: ``0.05``)
 
-::
+Settings ``database`` section
+*******************************
 
- sudo apt-get update
- sudo apt-get install -y postgresql libpq-dev
+- ``pool_size`` (default: ``1000``) Number of connections kept persistently in `SQL Alchemy pool
+  <https://docs.sqlalchemy.org/en/13/core/pooling.html#sqlalchemy.pool.QueuePool/>`_.
+- ``max_overflow`` (default: ``10``) Maximum overflow size of the connection pool.
+- ``small_string_length`` (default: ``255``) Length of a small string in the database.
+- ``small_string_length`` (default: ``32768``) Length of a large string in the database.
 
-Installation on Centos
-**********************
+Settings ``ldap`` section
+****************************
 
-Centos: CentOS 7.4 does not ship with a recent enough version of PostgreSQL, so it will need to be installed from an external repository. The instructions below show the installation of PostgreSQL 9.6.
+If LDAP/Active Directory is enabled and the user doesn't exist in the database yet, eNMS tries to authenticate against
+LDAP/AD using the `ldap3` library, and if successful, that user gets added to eNMS locally.
 
-::
+- ``active`` (default: ``false``) Enable LDAP authentication.
+- ``server`` (default: ``"ldap://domain.ad.company.com"``) LDAP Server URL (also called LDAP Provider URL)
+- ``userdn`` (default: ``"domain.ad.company.com"``) LDAP Distinguished Name (DN) for the user
+- ``basedn`` (default: ``"DC=domain,DC=ad,DC=company,DC=com"``) LDAP base distinguished name subtree that is used when
+  searching for user entries on the LDAP server. Use LDAP Data Interchange Format (LDIF) syntax for the entries.
+- ``admin_group`` (default: ``"eNMS.Users,network.Admins"``) string to match against 'memberOf' attributes of the
+  matched user to determine if the user is allowed to log in.
 
- yum install https://download.postgresql.org/pub/repos/yum/9.6/redhat/rhel-7-x86_64/pgdg-centos96-9.6-3.noarch.rpm
- yum install postgresql96 postgresql96-server postgresql96-devel
- /usr/pgsql-9.6/bin/postgresql96-setup initdb
+.. note:: Failure to match memberOf attribute output against ``admin_group`` results in a valid ldap user
+  within the ``basedn`` being denied access on login. If a memberOf attribute matches the ``admin_group``, they
+  will be given Admin permissions.
+.. note:: eNMS does not store the credentials of LDAP and TACACS users; however, those users are listed in the
+  Admin / Users panel.
 
-CentOS users should modify the PostgreSQL configuration to accept password-based authentication by replacing ``ident`` with ``md5`` for all host entries within ``/var/lib/pgsql/9.6/data/pg_hba.conf``. For example:
+Settings  ``mail`` section
+****************************
 
-::
+  - ``server`` (default: ``"smtp.googlemail.com"``)
+  - ``port`` (default: ``587``)
+  - ``use_tls`` (default: ``true``)
+  - ``username`` (default: ``"eNMS-user"``)
+  - ``sender`` (default: ``"eNMS@company.com"``)
 
- host    all             all             127.0.0.1/32            md5
- host    all             all             ::1/128                 md5
+Settings ``mattermost`` section
+**********************************
 
-Then, start the service and enable it to run at boot:
+- ``url`` (default: ``"https://mattermost.company.com/hooks/i1phfh6fxjfwpy586bwqq5sk8w"``)
+- ``channel`` (default: ``""``)
+- ``verify_certificate`` (default: ``true``)
 
-::
+Settings  ``paths`` section
+*****************************
 
- systemctl start postgresql-9.6
- systemctl enable postgresql-9.6
+- ``files`` (default:``""``) Path to eNMS managed files needed by services and workflows. For example, files to upload
+  to devices.
+- ``custom_code`` (default: ``""``) Path to custom libraries that can be utilized within services and workflows
+- ``custom_services`` (default: ``""``) Path to a folder that contains :ref:`Custom Services`. These services are added
+  to the list of existing services in the Automation Panel when building services and workflows.
+- ``playbooks`` (default: ``""``) Path to where Ansible playbooks are stored so that they are
+  choosable in the Ansible Playbook service.
 
-Database creation
-*****************
+Settings ``requests`` section
+********************************
 
-At a minimum, we need to create a database for eNMS and assign it a username and password for authentication. This is done with the following commands.
+Allows for tuning of the Python Requests library internal structures for connection pooling. Tuning
+these might be necessary depending on the load on eNMS.
 
-::
+- Pool
 
- sudo -u postgres psql -c "CREATE DATABASE enms;"
- sudo -u postgres psql -c "CREATE USER enms WITH PASSWORD 'strong-password-here';"
- sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE enms TO enms;"
+  - ``pool_maxsize`` (default: ``10``)
+  - ``pool_connections`` (default: ``100``)
+  - ``pool_block`` (default: ``false``)
 
-You can verify that authentication works issuing the following command and providing the configured password. (Replace ``localhost`` with your database server if using a remote database.)
+- Retries
 
-::
+    - ``total`` (default: ``2``)
+    - ``read`` (default: ``2``)
+    - ``connect`` (default: ``2``)
+    - ``backoff_factor`` (default: ``0.5``)
 
- psql -U enms -W -h localhost enms
-
-If successful, you will enter a enms prompt. Type \q to exit.
-
-Export PostgreSQL variables
-***************************
-
-The configuration file contains the SQL Alchemy configuration:
-
-::
-
- # Database
- SQLALCHEMY_DATABASE_URI = environ.get(
-     'ENMS_DATABASE_URL',
-     'postgresql://{}:{}@{}:{}/{}'.format(
-         environ.get('POSTGRES_USER', 'enms'),
-         environ.get('POSTGRES_PASSWORD'),
-         environ.get('POSTGRES_HOST', 'localhost'),
-         environ.get('POSTGRES_PORT', 5432),
-         environ.get('POSTGRES_DB', 'enms')
-     )
- )
-
-You need to export each variable with its value:
-
-::
-
- export POSTGRES_USER=your-username
- export POSTGRES_PASSWORD=your-password
- etc...
-
-LDAP/Active Directory Integration
+Settings  ``security`` section
 *********************************
 
-The following environment variables (with example values) control how eNMS integrates with LDAP/Active Directory for user authentication. eNMS first checks to see if the user exists locally inside eNMS. If not and if LDAP/Active Directory is enabled, eNMS tries to authenticate against LDAP/AD using the pure python ldap3 library, and if successful, that user gets added to eNMS locally.
+- ``hash_user_passwords`` (default: ``true``) All user passwords are automatically hashed by default.
+- ``forbidden_python_libraries`` (default: ``["eNMS","os","subprocess","sys"]``) There are a number of places in the UI
+  where the user is allowed to run custom python scripts. You can configure which python libraries cannot be imported
+  for security reasons.
+
+Settings ``slack`` section
+****************************
+
+- ``channel`` (default: ``""``)
+
+.. _ssh-settings:
+
+Settings ``ssh`` section
+************************
+
+- ``port_redirection`` (default: ``false``)
+- ``bypass_key_prompt`` (default: ``true``)
+- ``port`` (default: ``-1``)
+- ``start_port`` (default: ``9000``)
+- ``end_port`` (default: ``91000``)
+- ``enabled``
+
+    - ``web`` (default: ``true``)   Enables device terminal connections in a browser tab
+    - ``desktop`` (default: ``true``)  Enables device terminal connections from your desktop software that tunnels
+      through eNMS to the device
+
+Settings ``syslog`` section
+*****************************
+
+- ``active`` (default: ``false``)
+- ``address`` (default: ``"0.0.0.0"``)
+- ``port`` (default: ``514``)
+
+Settings ``tacacs`` section
+*****************************
+
+- ``active`` (default: ``false``)
+- ``address`` (default: ``""``)
+
+Settings ``vault`` section
+****************************
+
+For eNMS to use a Vault to store all sensitive data (user and network credentials), you must set
+the ``active`` variable to ``true``, provide an address and export
+
+**Public variables**
+
+- ``active`` (default: ``false``)
+- ``unseal`` (default: ``false``) Automatically unseal the Vault. You must export the keys as
+  environment variables.
+
+**Environment variables**
+
+- ``VAULT_ADDRESS``
+- ``VAULT_TOKEN``
+- ``UNSEAL_VAULT_KEY1``
+- ``UNSEAL_VAULT_KEY2``
+- ``UNSEAL_VAULT_KEY3``
+- ``UNSEAL_VAULT_KEY4``
+- ``UNSEAL_VAULT_KEY5``
+
+Settings ``view`` section
+***************************
+
+Controls the default view for where the map is initially displayed in the Visualization panels
+
+- ``longitude`` (default: ``-96.0``)
+- ``latitude`` (default: ``33.0``)
+- ``zoom_level`` (default: ``5``)
+- ``tile_layer`` (default: ``"osm"``)
+- ``marker`` (default: ``"Image"``)
+
+
+Logging file
+############
+
+Logging settings exist in separate file: ``/setup/logging.json``. This file is directly passed into the Python Logging library,
+so it uses the Python3 logger file configuration syntax for your version of Python3. Using this file, the administrator
+can configure additional loggers and logger destinations as needed for workflows.
+
+By default, the two loggers are configured:
+  - The default logger has handlers for sending logs to the stdout console as well as a rotating log file ``logs/enms.log``
+  - A security logger captures logs for: User A ran Service/Workflow B on Devices [C,D,E...] to log file ``logs/security.log``
+
+And these can be reconfigured here to forward through syslog to remote collection if desired.
+
+Additionally, the ``external loggers`` section allows for changing the log levels for the various libraries used by eNMS
+
+
+Properties file
+###############
+
+The ``/setup/properties.json`` file includes:
+
+  1. Allowing for additional custom properties to be defined in eNMS for devices. In this way, eNMS device inventory can be extended to include additional columns/fields
+  #. Allowing for additional custom parameters to be added to services and workflows
+  #. Controlling which parameters and widgets can be seen from the Dashboard
+  #. Controlling which column/field properties are visible in the tables for device and link inventory, configuration, pools, as well as the service, results, and task browsers
+
+|
+
+properties.json custom device addition example:
+    - Keys under ``{"custom": { "device": {``
+        - name the custom attribute being added.
+        - Keys/Value pairs under the newly added custom device attribute device_status.
+            - "pretty_name":"Default Username", *device attribute name to be displayed in UI*
+            - "type":"string", *data type of attribute*
+            - "default":"None", *default value of attribute*
+            - "private": true *optional - is attribute hidden from user*
+            - "configuration": true *optional - creates a custom 'Inventory/Configurations' attribute
+            - "log_change" false *optional - disables logging when a changes is made to attribute
+            - "form": false *optional - disables option to edit attribute in Device User Interface
+            - "migrate": fasle *optional - choose if attribute should be consdered for migration
+            - "serialize": false *optional - whether it is passed to the front-end when the object itself is
+    - Keys under ``"tables" : { "device" : [ {  & "tables" : { "configuration" : [ {``
+        - Details which attributes to display in these table, add custom attributes here
+        - Keys/Value pairs for tables
+            - "data":"device_status", *attribute created in custom device above*
+            - "title":"Device Status", *name to display in table*
+            - "search":"text", *search type*
+            - "width":"80%", *optional - text alignment, other example "width":"130px",*
+            - "visible":false, *default display option*
+            - "orderable": false *allow user to order by this attribute*
+    - Values under ``"filtering" : { "device" : [``
+        - details which attributes to use for filtering
+        - you will need to add any custom device attributes name to this list for filtering
+
+RBAC file
+#########
+
+The ``/setup/rbac.json`` file allows configuration of:
+
+  - Which user roles have access to each of the controls in the UI
+  - Which user roles have access to each of the REST API endpoints
+
+Environment variables
+#####################
+
+  - SECRET_KEY=secret_key
+  - MAIL_PASSWORD=mail_password
+  - TACACS_PASSWORD=tacacs_password
+  - SLACK_TOKEN=slack_token
+
+Scheduler
+---------
+
+The scheduler used for running tasks at a later time is a web application that is distinct from eNMS.
+It can be installed on the same server as eNMS, or a remote server.
+
+Before running the scheduler, you must configure the following environment variables so it knows where
+eNMS is located and what credentials to authenticate with:
+
+- ``ENMS_ADDR``: URL of the remote server (example: ``"http://192.168.56.102"``)
+- ``ENMS_USER``: eNMS login
+- ``ENMS_PASSWORD``: eNMS password
+
+The scheduler is a asynchronous application that must be deployed with uvicorn :
 
 ::
 
-  Set to 1 to enable LDAP authentication; otherwise 0:
-    export USE_LDAP=1
-  The LDAP Server URL (also called LDAP Provider URL):
-    export LDAP_SERVER=ldap://domain.ad.company.com
-  The LDAP distinguished name (DN) for the user. This gets combined inside eNMS as "domain.ad.company.com\\username" before being sent to the server.
-    export LDAP_USERDN=domain.ad.company.com
-  The base distinguished name (DN) subtree that is used when searching for user entries on the LDAP server. Use LDAP Data Interchange Format (LDIF) syntax for the entries.
-    export LDAP_BASEDN=DC=domain,DC=ad,DC=company,DC=com
-  The string to match against 'memberOf' attributes of the matched user to determine if the user is granted Admin Privileges inside eNMS.
-    export LDAP_ADMIN_GROUP=company.AdminUsers[,group2,group3]
+ cd scheduler
+ uvicorn scheduler:scheduler --host 0.0.0.0
 
-.. note:: Failure to match memberOf attribute output against LDAP_ADMIN_GROUP results in eNMS user account creation with minimum privileges. An admin user can afterwards alter that user's privileges from :guilabel:`Admin/User Management`
-.. note:: Because eNMS saves the user credentials for LDAP and TACACS+ into the Vault, if a user's credentials expire due to password aging, that user needs to login to eNMS in order for the updated credentials to be replaced in Vault storage. In the event that jobs are already scheduled with User Credentials, these might fail if the credentials are not updated in eNMS.
-
-
-GIT Integration
-***************
-
-To enable sending device configs captured by configuration management, as well as service and workflow job logs, to GIT for revision control you will need to configure the following:
-
-First, create two separate git projects in your repository. Assign a single GIT userid to have write access to both.
-
-Additionally, the following commands need to be run to properly configure GIT in the eNMS environment. These commands populate ~/.gitconfig:
-
-::
-
-  git config --global user.name "git_username"
-  git config --global user.email "git_username_email@company.com"
-  git config --global push.default simple
-
-Similarly, if your environment already has an SSH key created for other purposes, you will need to create a new SSH key to register with the GIT server:
-
-::
-
-  ssh-keygen -t rsa -f ~/.ssh/id_rsa.git
-
-And to instruct SSH to use the new key when connecting with the GIT server, create an entry in ~/.ssh/config:
-
-::
-
-  Host git-server
-    Hostname git-server.company.com
-    IdentityFile ~/.ssh/id_rsa.git
-    IdentitiesOnly yes
-
-Additionally, the URLs of each of the GIT server repositories needs to be populated in the Administration Panel of the UI:
-  - for the Automation repository to be able tp store the results of services and workflows in git.
-  - for the Configurations repository to be able to store device configurations in git.
-
-.. note:: When setting up new groups/projects in GitLab, know that the Master branch by default is protected, and unfortunately in the current version of GitLab, it will not show you that it is protected until a file is added to the repository first. A trick is to press the 'Add README' convenience button in the GitLab UI; this will add a file. Then go to repository, protected branches, and set access rights for Masters and Developers and click 'Unprotect'.
-
-
-Default Examples
-----------------
-
-By default, eNMS will create a few examples of each type of object (devices, links, services, workflows...).
-If you run eNMS in production, you might want to deactivate this.
-
-To deactivate, set the ``CREATE_EXAMPLES`` environment variable to ``0``.
-
-::
-
- export CREATE_EXAMPLES=0
-
-Logging
--------
-
-You can configure eNMS as well as Gunicorn log level with the following environment variables
-
-::
-
-  export ENMS_LOG_LEVEL='CRITICAL'
-  export GUNICORN_LOG_LEVEL='critical'
-  export GUNICORN_ACCESS_LOG='None'
-
-Migration, Backup, and Restore
-------------------------------
-
-The eNMS migration system handles exporting the complete database content into JSON files based on eNMS object types.
-These migration files are used for migrating from one version of eNMS to the next version. They are also used for Backup and Restore of eNMS.
-The migration system is accessed from :guilabel:`Admin/Database` or from the ReST API.
-Device inventory data is included in the exported migration files, and new devices can be added by importing the Topology Spreadsheet, so these
-mechanisms can work together to manage your data:
-
-When creating a new instance of eNMS (backup instance, new version of eNMS):
-  - Install eNMS; note that eNMS has an empty database when installed the first time
-  - Run the :guilabel:`Admin/Database/Migration/Import` either from the UI or from the ReST API. Select 'Empty_database_before_import' = True, specify
-    the location of the file to import, and select all object types to be imported: "User", "Device", "Link", "Pool", "Service", "WorkflowEdge", "Workflow", "Task"
-  - Next, run the :guilabel:`Inventory/Import & Export/Import and Export Topology` and specify the Excel Spreadsheet to overlay
-    new Device and topology data. Make sure not to select 'replace on import' to prevent overwriting the device data from the migration import.
-    Select 'update pools on import' to dynamically have pool selection criteria re-applied to the entire inventory contents
-  - Multiple topology spreadsheets can be added as overlays if desired. Selection of 'update pools on import' can be deferred to run only after the last import.
-
-When backing up eNMS, it is only necessary to perform :guilabel:`Admin/Database/Migration/Export` either from the UI or from the ReST API.
-  - Select a directory name for storing the migration files into, and select all object types to Export
-  - the Topology Export of device and link data from :guilabel:`Inventory/Import & Export/Import and Export Topology` is not needed for Backup.
-    It is intended for sharing of device and link data.
-
-Advanced: Migrating Services and Workflows to a new instance with a different inventory:
-  - The migration files contain JSON representations of database relationships. Loading a mismatched set of migration files could result in database corruption, so be careful.
-  - The Service and Workflow .yaml migration files also contain the list of devices that are selected for each job. If tnose devices do not exactly exist on the new instance,
-    selected devices and pools need to be cleared on all services and workflows before exporting to files. This will allow those services and workflows to be migrated to the new instance.
-  - Files needed to migrate: Service.yaml, Workflow.yaml, WorkflowEdge.yaml
-
-What if I only want to Import new devices or links to eNMS:
-  - Then perform import of the topology spreadsheet using :guilabel:`Inventory/Import & Export/Import and Export Topology`
-  - Make sure 'replace on import' is not selected, and select 'update pools on import'

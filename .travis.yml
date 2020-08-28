@@ -7,20 +7,19 @@ matrix:
   include:
     - language: python
       python:
-        - 3.6
-        - 3.7
+        - 3.8
       install:
-        - pip install -r requirements_dev.txt
+        - pip install -r build/requirements/requirements_dev.txt
       script:
         - black --check --verbose .
-        - flake8
-        - mypy .
+        - flake8 --config build/linting/.flake8 .
         - coverage run --source=./eNMS -m pytest
       after_success:
         - coveralls
 
     - language: node_js
-      node_js: 
+      node_js:
         - "node"
-      script: 
+      script:
+        - npm run prettier
         - npm run lint
